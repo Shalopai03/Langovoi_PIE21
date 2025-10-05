@@ -16,24 +16,45 @@
 // - ValidationRule: validate: (value: string) => boolean, message: string
 // - FormData: [fieldName: string]: string
 
+interface FormField {
+	name: string
+	element: HTMLInputElement | HTMLTextAreaElement
+	validators: ValidationRule[]
+	errorElement: HTMLElement | null
+}
+
+interface ValidationRule {
+    validate: (value: string) => boolean;
+    message: string 
+}
+
+interface FormData {
+    [fieldName: string]: string;
+}
+
 // Утилита для безопасного получения элемента
-function getElementById(id) {
-    const element = document.getElementById(id);
-    if (!element) {
-        throw new Error(`Элемент с ID "${id}" не найден`);
-    }
-    return element;
+function getElementById<T extends HTMLElement>(id: string): T {
+	const element = document.getElementById(id)
+	if (!element) {
+		throw new Error(`Элемент с ID "${id}" не найден`)
+	}
+	return element as T,
 }
 
 // Утилита для получения элемента определенного типа
-function getElementByIdAsType(id, expectedType) {
+function getElementByIdAsType<T extends HTMLElement>(
+	id: string,
+	expectedTag: string
+): T {
     const element = getElementById(id);
     
-    if (element.tagName.toLowerCase() !== expectedType.toLowerCase()) {
-        throw new Error(`Элемент "${id}" должен быть ${expectedType}, но это ${element.tagName}`);
-    }
-    
-    return element;
+    if (element.tagName.toLowerCase() !== expectedTag.toLowerCase()) {
+		throw new Error(
+			`Элемент "${id}" должен быть <${expectedTag}>, но это <${element.tagName.toLowerCase()}>`
+		)
+	}
+
+	return element
 }
 
 // Класс для управления формой
@@ -243,13 +264,13 @@ const Validators = {
 };
 
 // Утилиты для работы с DOM событиями
-function addClickListener(elementId, handler) {
+function addClickListener(elementId: string, handler: (event: MouseEvent) => void): HTMLElement {    
     const element = getElementById(elementId);
     element.addEventListener('click', handler);
     return element;
 }
 
-function addKeyboardListener(elementId, handler, keyCode) {
+function addKeyboardListener( elementId: string, handler: (event: KeyboardEvent) => void,keyCode?: string ): HTMLElement {
     const element = getElementById(elementId);
     
     element.addEventListener('keydown', (event) => {
