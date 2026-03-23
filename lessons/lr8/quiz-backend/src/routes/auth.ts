@@ -8,6 +8,7 @@ const auth = new Hono()
 
 // Mock данные
 const MOCK_USERS: Record<string, { id: string; email: string; name: string }> =
+	//хранение тестовых пользователей
 	{
 		test_code: {
 			id: '12345',
@@ -21,25 +22,25 @@ const MOCK_USERS: Record<string, { id: string; email: string; name: string }> =
 		},
 	}
 
-// POST /api/auth/github/callback
+// POST /api/auth/github/callback обработка
 auth.post('/github/callback', async c => {
 	try {
 		const body = await c.req.json()
 		console.log('📦 Request body:', body)
 
-		const validation = githubCallbackSchema.safeParse(body)
+		const validation = githubCallbackSchema.safeParse(body) //валидация данных
 
 		if (!validation.success) {
 			return c.json(
 				{
-					error: 'Validation failed',
+					error: 'Validation failed', //возвращаем ошибку
 					details: validation.error.issues,
 				},
 				400,
 			)
 		}
 
-		const { code } = validation.data
+		const { code } = validation.data //извлекаем код авторизации из валид данных
 		console.log('🔑 Processing code:', code)
 
 		let githubUser
@@ -48,7 +49,7 @@ auth.post('/github/callback', async c => {
 		if (code.startsWith('test_')) {
 			console.log('🧪 Using mock mode')
 
-			githubUser = MOCK_USERS[code]
+			githubUser = MOCK_USERS[code] //поиск пользователей
 
 			if (!githubUser) {
 				githubUser = {
@@ -67,7 +68,7 @@ auth.post('/github/callback', async c => {
 			)
 		}
 
-		// Сохраняем в базу данных
+		// Сохраняем пользователя в базу данных
 		console.log('💾 Saving user to database:', githubUser)
 
 		const user = await prisma.user.upsert({
@@ -93,7 +94,7 @@ auth.post('/github/callback', async c => {
 			exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 7 дней
 		}
 
-		const secret = process.env.JWT_SECRET || 'dev-secret-key'
+		const secret = process.env.JWT_SECRET || 'dev-secret-key' //получаем секрет ключ
 		const token = await sign(payload, secret)
 
 		// Возвращаем ответ
@@ -122,6 +123,7 @@ auth.post('/github/callback', async c => {
 })
 
 auth.get('/me', async c => {
+	//получаем инфу по текущему токену
 	try {
 		const authHeader = c.req.header('Authorization')
 
@@ -156,6 +158,7 @@ auth.get('/me', async c => {
 		}
 
 		return c.json({
+			//возвращаем данные пользователя
 			success: true,
 			user: {
 				id: user.id,
