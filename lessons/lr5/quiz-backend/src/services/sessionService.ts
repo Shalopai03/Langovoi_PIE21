@@ -61,7 +61,7 @@ export class SessionService {
 			}
 
 			// добавить проверку что вопрос принадлежит сессий **
-			const sessionQuestion = await tx.sessionQuestion.findUnique({
+			const SessionQuestion = await tx.sessionQuestion.findUnique({
 				where: {
 					sessionId_questionId: {
 						sessionId,
@@ -69,8 +69,8 @@ export class SessionService {
 					},
 				},
 			})
-			// создаем таблицу SessionQuestion где сохраняем id вопросов и выполняем запрос по поиску id сессий и вопроса. Все вопросы сохраняются в SessionQuestion, проверяем существует ли пара id сессий и вопроса и отклоняем запрос если не принадлежит
-			if (!sessionQuestion) {
+			// В таблице SessionQuestion где сохраняем id вопросов и выполняем запрос по поиску id сессий и вопроса. Все вопросы сохраняются в SessionQuestion, проверяем существует ли пара id сессий и вопроса и отклоняем запрос если не принадлежит
+			if (!SessionQuestion) {
 				throw new SessionServiceError('Question not in session', 400)
 			}
 
@@ -138,22 +138,22 @@ export class SessionService {
 		createdAt: Date
 	}> {
 		return prisma.$transaction(async tx => {
-			// Создаём сессию со сроком действия 1 час *сохранить
+			// 1. Создаём сессию
 			const session = await tx.session.create({
 				data: {
 					userId,
-					expiresAt: new Date(Date.now() + 60 * 60 * 1000), // +1 час
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
 					status: 'in_progress',
 				},
 			})
 
-			// Формируем условия для выборки вопросов
+			// 2. Фильтр
 			const where: any = {}
 			if (options?.categoryId) {
 				where.categoryId = options.categoryId
 			}
 
-			// Получаем все вопросы (или отфильтрованные по категории)
+			// 3. Получаем вопросы
 			const allQuestions = await tx.question.findMany({
 				where,
 				select: {
@@ -163,15 +163,21 @@ export class SessionService {
 				},
 			})
 
-			// Если указан limit, выбираем случайные вопросы в нужном количестве
+			// ❗ ВАЖНО: если нет вопросов
+			if (allQuestions.length === 0) {
+				throw new Error('No questions available')
+			}
+
+			// 4. Выбираем случайные
 			let selectedQuestions = allQuestions
+
 			if (options?.limit && options.limit > 0) {
-				// Перемешиваем массив и берём первые limit элементов
-				selectedQuestions = allQuestions
+				selectedQuestions = [...allQuestions] // 🔥 фикс (копия массива)
 					.sort(() => 0.5 - Math.random())
 					.slice(0, options.limit)
 			}
 
+			// 5. Сохраняем связь session ↔ question
 			await tx.sessionQuestion.createMany({
 				data: selectedQuestions.map(q => ({
 					sessionId: session.id,
@@ -179,7 +185,7 @@ export class SessionService {
 				})),
 			})
 
-			// Возвращаем объект, соответствующий SessionResponse
+			// 6. Возвращаем ответ
 			return {
 				sessionId: session.id,
 				userId: session.userId,
@@ -195,7 +201,7 @@ export class SessionService {
 
 	async submitSession(sessionId: string) {
 		return prisma.$transaction(async tx => {
-			// Проверяет, что сессия существует, активна и не истекла
+			// 1. Проверяем сессию
 			const session = await tx.session.findUnique({
 				where: { id: sessionId },
 				include: {
@@ -219,13 +225,18 @@ export class SessionService {
 				throw new SessionServiceError('Session expired', 409)
 			}
 
-			// Суммирует баллы всех ответов
-			const totalScore = session.answers
-				.filter(answer => answer.score !== null)
-				.reduce((sum, answer) => sum + (answer.score ?? 0), 0)
+			// 2. Проверка: есть ли вообще ответы
+			if (session.answers.length === 0) {
+				throw new SessionServiceError('Session is not active', 409)
+			}
 
-			//	Обновляет статус сессии на completed, устанавливает score и completedAt
-			return tx.session.update({
+			// 3. Считаем баллы
+			const totalScore = session.answers.reduce((sum, answer) => {
+				return sum + (answer.score ?? 0)
+			}, 0)
+
+			// 4. Завершаем сессию
+			const updatedSession = await tx.session.update({
 				where: { id: sessionId },
 				data: {
 					status: 'completed',
@@ -236,6 +247,8 @@ export class SessionService {
 					answers: true,
 				},
 			})
+
+			return updatedSession
 		})
 	}
 }

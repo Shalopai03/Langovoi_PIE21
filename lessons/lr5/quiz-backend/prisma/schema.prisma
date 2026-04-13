@@ -92,4 +92,5 @@ model SessionQuestion {
 
   @@unique([sessionId, questionId])
   @@index([sessionId])
-} // для проверки принадлежит ли вопрос к сессий
+  }
+// для проверки принадлежит ли вопрос к сессий
